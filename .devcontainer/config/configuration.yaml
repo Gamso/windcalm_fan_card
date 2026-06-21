@@ -1,0 +1,130 @@
+homeassistant:
+  name: Windcalm DevContainer
+  latitude: 48.8566
+  longitude: 2.3522
+  elevation: 0
+  unit_system: metric
+  country: FR
+  time_zone: Europe/Paris
+  language: fr
+
+default_config:
+
+logger:
+  default: warning
+  logs:
+    homeassistant.components.lovelace: info
+
+lovelace:
+  resource_mode: yaml
+  resources:
+    - url: /local/windcalm_card/windcalm-fan-card.js?v=5
+      type: module
+  dashboards:
+    lovelace-windcalm:
+      mode: yaml
+      filename: ui-lovelace.yaml
+      title: Windcalm Dev
+      icon: mdi:fan
+      show_in_sidebar: true
+
+# ── Backing helpers ───────────────────────────────────────────────────────────
+
+input_number:
+  wc_fan_speed_backing:
+    name: "Windcalm – Fan speed % (backing)"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    icon: mdi:speedometer
+  wc_timer_backing:
+    name: "Windcalm – Timer minutes (backing)"
+    min: 0
+    max: 480
+    step: 1
+    initial: 0
+    icon: mdi:timer
+
+input_boolean:
+  wc_light_backing:
+    name: "Windcalm – Light (backing)"
+    icon: mdi:lightbulb
+    initial: false
+  wc_sound_backing:
+    name: "Windcalm – Sound beep (backing)"
+    icon: mdi:volume-high
+    initial: false
+
+# ── Template entities ─────────────────────────────────────────────────────────
+
+template:
+  - fan:
+      # fan.ceiling_fan_with_light
+      # State derived from speed: on when speed > 0, off when speed = 0
+      - name: "ceiling fan with light"
+        unique_id: ceiling_fan_with_light
+        state: "{{ 'on' if states('input_number.wc_fan_speed_backing') | int > 0 else 'off' }}"
+        percentage: "{{ states('input_number.wc_fan_speed_backing') | int }}"
+        speed_count: 6
+        turn_on:
+          service: input_number.set_value
+          target:
+            entity_id: input_number.wc_fan_speed_backing
+          data:
+            value: 17
+        turn_off:
+          service: input_number.set_value
+          target:
+            entity_id: input_number.wc_fan_speed_backing
+          data:
+            value: 0
+        set_percentage:
+          service: input_number.set_value
+          target:
+            entity_id: input_number.wc_fan_speed_backing
+          data:
+            value: "{{ percentage }}"
+
+  - light:
+      # light.ceiling_fan_with_light
+      - name: "ceiling fan with light"
+        unique_id: ceiling_fan_with_light_light
+        state: "{{ states('input_boolean.wc_light_backing') }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.wc_light_backing
+        turn_off:
+          service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.wc_light_backing
+
+  - number:
+      # number.ceiling_fan_with_light_minuteur
+      - name: "ceiling fan with light minuteur"
+        unique_id: ceiling_fan_with_light_minuteur
+        state: "{{ states('input_number.wc_timer_backing') | int }}"
+        min: 0
+        max: 480
+        step: 1
+        set_value:
+          service: input_number.set_value
+          target:
+            entity_id: input_number.wc_timer_backing
+          data:
+            value: "{{ value }}"
+
+  - switch:
+      # switch.ceiling_fan_with_light_son
+      - name: "ceiling fan with light son"
+        unique_id: ceiling_fan_with_light_son
+        state: "{{ states('input_boolean.wc_sound_backing') }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.wc_sound_backing
+        turn_off:
+          service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.wc_sound_backing

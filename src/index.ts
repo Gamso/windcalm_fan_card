@@ -1,0 +1,1 @@
+import "./windcalm-fan-card";
