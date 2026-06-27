@@ -24,6 +24,12 @@
   },
   "controls": {
     "light": "Lumière",
+    "color_temp": "Température de couleur",
+    "temp_warm": "Chaud",
+    "temp_cool": "Froid",
+    "direction": "DIRECTION",
+    "dir_forward": "Normale",
+    "dir_reverse": "Inverse",
     "timer": "Minuterie",
     "timer_none": "Aucune",
     "sound": "Bip sonore"

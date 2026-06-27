@@ -24,6 +24,12 @@
   },
   "controls": {
     "light": "Light",
+    "color_temp": "Color temperature",
+    "temp_warm": "Warm",
+    "temp_cool": "Cool",
+    "direction": "DIRECTION",
+    "dir_forward": "Normal",
+    "dir_reverse": "Reverse",
     "timer": "Timer",
     "timer_none": "None",
     "sound": "Sound beep"

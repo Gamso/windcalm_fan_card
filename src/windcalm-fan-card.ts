@@ -75,8 +75,37 @@ class WindcalmFanCard extends LitElement {
     return percentageToSpeed(Number(fan.attributes?.percentage ?? 0));
   }
 
+  // FanEntityFeature.DIRECTION = 4
+  private get _fanSupportsDirection(): boolean {
+    const features = Number(this._fanState?.attributes?.supported_features ?? 0);
+    return (features & 4) !== 0;
+  }
+
+  private get _fanDirection(): "forward" | "reverse" {
+    return this._fanState?.attributes?.direction === "reverse"
+      ? "reverse"
+      : "forward";
+  }
+
   private get _isLightOn(): boolean {
     return this._lightState?.state === "on";
+  }
+
+  private get _lightSupportsColorTemp(): boolean {
+    const modes: string[] = this._lightState?.attributes?.supported_color_modes ?? [];
+    return modes.includes("color_temp");
+  }
+
+  private get _minKelvin(): number {
+    return Number(this._lightState?.attributes?.min_color_temp_kelvin ?? 2700);
+  }
+  private get _maxKelvin(): number {
+    return Number(this._lightState?.attributes?.max_color_temp_kelvin ?? 6500);
+  }
+  private get _currentKelvin(): number {
+    return Number(
+      this._lightState?.attributes?.color_temp_kelvin ?? this._minKelvin
+    );
   }
 
   private get _isSoundOn(): boolean {
@@ -109,9 +138,25 @@ class WindcalmFanCard extends LitElement {
     }
   }
 
+  private _setDirection(direction: "forward" | "reverse"): void {
+    this.hass.callService("fan", "set_direction", {
+      entity_id: this._entities.fan,
+      direction,
+    });
+  }
+
   private _toggleLight(): void {
     if (!this._entities.light) return;
     this.hass.callService("light", "toggle", { entity_id: this._entities.light });
+  }
+
+  private _setColorTemp(ev: Event): void {
+    if (!this._entities.light) return;
+    const kelvin = Number((ev.target as HTMLInputElement).value);
+    this.hass.callService("light", "turn_on", {
+      entity_id: this._entities.light,
+      color_temp_kelvin: kelvin,
+    });
   }
 
   private _setTimer(ev: Event): void {
@@ -223,6 +268,36 @@ class WindcalmFanCard extends LitElement {
             )}
           </div>
 
+          ${this._fanSupportsDirection
+            ? html`
+              <div class="section-label dir-label">${this._t("controls.direction")}</div>
+              <div class="dir-segment">
+                <button
+                  class="dir-btn ${this._fanDirection === "forward" ? "active" : ""}"
+                  @click=${() => this._setDirection("forward")}
+                  ?disabled=${isUnavailable}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path d="M4 12a8 8 0 1 0 2.3 -5.6"/>
+                    <polyline points="4 3 4 7 8 7"/>
+                  </svg>
+                  ${this._t("controls.dir_forward")}
+                </button>
+                <button
+                  class="dir-btn ${this._fanDirection === "reverse" ? "active" : ""}"
+                  @click=${() => this._setDirection("reverse")}
+                  ?disabled=${isUnavailable}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path d="M20 12a8 8 0 1 1 -2.3 -5.6"/>
+                    <polyline points="20 3 20 7 16 7"/>
+                  </svg>
+                  ${this._t("controls.dir_reverse")}
+                </button>
+              </div>
+            `
+            : nothing}
+
           ${this._lightState || this._timerState || this._soundState
             ? html`<div class="divider"></div>`
             : nothing}
@@ -243,6 +318,26 @@ class WindcalmFanCard extends LitElement {
                   aria-label="${this._t("controls.light")}"
                 ></button>
               </div>
+              ${this._isLightOn && this._lightSupportsColorTemp
+                ? html`
+                  <div class="temp-row">
+                    <span class="temp-label warm">${this._t("controls.temp_warm")}</span>
+                    <input
+                      class="temp-slider"
+                      type="range"
+                      min="${this._minKelvin}"
+                      max="${this._maxKelvin}"
+                      step="100"
+                      .value=${String(this._currentKelvin)}
+                      @change=${this._setColorTemp}
+                      ?disabled=${isUnavailable}
+                      aria-label="${this._t("controls.color_temp")}"
+                    />
+                    <span class="temp-label cool">${this._t("controls.temp_cool")}</span>
+                    <span class="temp-value">${this._currentKelvin}K</span>
+                  </div>
+                `
+                : nothing}
             `
             : nothing}
 
@@ -485,6 +580,41 @@ class WindcalmFanCard extends LitElement {
       color: var(--wc-teal-mid);
     }
 
+    .dir-label {
+      margin-top: 16px;
+    }
+    .dir-segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .dir-btn {
+      padding: 9px 6px;
+      border: 1px solid var(--divider-color);
+      border-radius: 8px;
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .dir-btn:hover:not(:disabled) {
+      background: var(--secondary-background-color);
+    }
+    .dir-btn.active {
+      background: var(--wc-teal-light);
+      border-color: var(--wc-teal);
+      color: var(--wc-teal-dark);
+    }
+    .dir-btn:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
     .divider {
       height: 1px;
       background: var(--divider-color);
@@ -507,6 +637,62 @@ class WindcalmFanCard extends LitElement {
     .row-label svg {
       color: var(--secondary-text-color);
       flex-shrink: 0;
+    }
+
+    .temp-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0 10px 26px;
+    }
+    .temp-label {
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .temp-label.warm {
+      color: #ba7517;
+    }
+    .temp-label.cool {
+      color: #378add;
+    }
+    .temp-value {
+      font-size: 11px;
+      color: var(--secondary-text-color);
+      min-width: 42px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .temp-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to right, #ffb46e, #fff6e8 50%, #cfe4ff);
+      outline: none;
+      cursor: pointer;
+    }
+    .temp-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--card-background-color, #fff);
+      border: 2px solid var(--primary-text-color);
+      cursor: pointer;
+    }
+    .temp-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--card-background-color, #fff);
+      border: 2px solid var(--primary-text-color);
+      cursor: pointer;
+    }
+    .temp-slider:disabled {
+      opacity: 0.5;
+      cursor: default;
     }
 
     .toggle {

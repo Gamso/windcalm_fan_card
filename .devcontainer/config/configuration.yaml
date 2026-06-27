@@ -18,7 +18,7 @@ logger:
 lovelace:
   resource_mode: yaml
   resources:
-    - url: /local/windcalm_card/windcalm-fan-card.js?v=5
+    - url: /local/windcalm_card/windcalm-fan-card.js?v=7
       type: module
   dashboards:
     lovelace-windcalm:
@@ -45,6 +45,13 @@ input_number:
     step: 1
     initial: 0
     icon: mdi:timer
+  wc_light_kelvin_backing:
+    name: "Windcalm – Light color temp K (backing)"
+    min: 3000
+    max: 6500
+    step: 100
+    initial: 3000
+    icon: mdi:temperature-kelvin
 
 input_boolean:
   wc_light_backing:
@@ -56,6 +63,15 @@ input_boolean:
     icon: mdi:volume-high
     initial: false
 
+input_select:
+  wc_fan_direction_backing:
+    name: "Windcalm – Fan direction (backing)"
+    options:
+      - "forward"
+      - "reverse"
+    initial: "forward"
+    icon: mdi:rotate-right
+
 # ── Template entities ─────────────────────────────────────────────────────────
 
 template:
@@ -66,6 +82,7 @@ template:
         unique_id: ceiling_fan_with_light
         state: "{{ 'on' if states('input_number.wc_fan_speed_backing') | int > 0 else 'off' }}"
         percentage: "{{ states('input_number.wc_fan_speed_backing') | int }}"
+        direction: "{{ states('input_select.wc_fan_direction_backing') }}"
         speed_count: 6
         turn_on:
           service: input_number.set_value
@@ -85,20 +102,12 @@ template:
             entity_id: input_number.wc_fan_speed_backing
           data:
             value: "{{ percentage }}"
-
-  - light:
-      # light.ceiling_fan_with_light
-      - name: "ceiling fan with light"
-        unique_id: ceiling_fan_with_light_light
-        state: "{{ states('input_boolean.wc_light_backing') }}"
-        turn_on:
-          service: input_boolean.turn_on
+        set_direction:
+          service: input_select.select_option
           target:
-            entity_id: input_boolean.wc_light_backing
-        turn_off:
-          service: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.wc_light_backing
+            entity_id: input_select.wc_fan_direction_backing
+          data:
+            option: "{{ direction }}"
 
   - number:
       # number.ceiling_fan_with_light_minuteur
@@ -128,3 +137,34 @@ template:
           service: input_boolean.turn_off
           target:
             entity_id: input_boolean.wc_sound_backing
+
+# ── Legacy template light (color_temp support) ────────────────────────────────
+# The modern `template:` integration has no light platform, so the simulated
+# light.ceiling_fan_with_light uses the legacy template light platform, which
+# supports color temperature. Mireds = 1,000,000 / Kelvin.
+#   3000 K  -> 333 mireds (warm) ; 6500 K -> 154 mireds (cool)
+light:
+  - platform: template
+    lights:
+      ceiling_fan_with_light:
+        unique_id: ceiling_fan_with_light_light
+        friendly_name: "Ceiling fan with light"
+        value_template: "{{ states('input_boolean.wc_light_backing') }}"
+        temperature_template: >
+          {{ (1000000 / (states('input_number.wc_light_kelvin_backing') | float(3000))) | round | int }}
+        min_mireds: 154
+        max_mireds: 333
+        turn_on:
+          service: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.wc_light_backing
+        turn_off:
+          service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.wc_light_backing
+        set_temperature:
+          service: input_number.set_value
+          target:
+            entity_id: input_number.wc_light_kelvin_backing
+          data:
+            value: "{{ (1000000 / color_temp) | round | int }}"
